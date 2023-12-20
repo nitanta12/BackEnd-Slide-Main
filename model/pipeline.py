@@ -22,7 +22,7 @@ api_key = os.getenv('SEARCH_KEY')
 cse_id = os.getenv('ENGINE_KEY')
 service = build("customsearch", "v1", developerKey=api_key)
 
-
+#region     Pre Processing
 def create_attention_mask(input_ids):
   attention_masks = []
   for sent in input_ids:
@@ -79,7 +79,9 @@ def extract_image(query):
     res = service.cse().list(q=query, cx=cse_id, searchType="image").execute()
     img_url = res["items"][0]["link"]
     return img_url
+#endregion
 
+#region    code we have to right logic for
 def clustering(sentence_features, number_extract=3):
     number_of_sent = len(sentence_features) if len(sentence_features) < 12 else 12
     kmeds = KMedoids(n_clusters=number_extract, 
@@ -130,7 +132,10 @@ def abstractive_sum(extract_sentences):
     # )
     decoded_summaries = [tokenizer.decode(s, skip_special_tokens=True, clean_up_tokenization_spaces=True) for s in summaries]
     return decoded_summaries[0]
+#endregion     end of the region where our logic is written
 
+
+#region Slides
 def get_slide_content(text):
     topics = ['Background', 'Details', 'Conclusion']
     sent_per_slide = 3
@@ -167,3 +172,4 @@ def get_slide_content(text):
         slide_content[topics[i]] = section_slides
 
     return total_slides, slide_content
+#endregion
