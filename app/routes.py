@@ -1,16 +1,11 @@
 from flask import Flask, render_template, url_for, request
 import model.pipeline as pipeline # model\pipeline.py
-import videogen as videogen
 import slidegen as slidegen
-import audiogen as audiogen
 import drive_interaction as drive_interaction
-
 import parsing as parsing
 import datetime
-
 import shutil
 import os
-
 import json
 from flask import jsonify
 from app import app
@@ -25,15 +20,7 @@ def execute_pipeline(document):
 	
 	os.mkdir('output')
 	document['no_of_slides'], document['slides'] = pipeline.get_slide_content(document['text'])
-
 	# print (document)
-	#mutithreading can be used here
-	slidegen.create_slides(document)
-	audiogen.synthesize_audio(document)
-
-	number_of_slides = document['no_of_slides']+2 #the first two slides
-	videogen.generate_video(number_of_slides)
-
 	shutil.rmtree('output', ignore_errors=True)
 	shutil.rmtree('images', ignore_errors=True)
 
@@ -44,7 +31,7 @@ def basic_authentication():
 
 @app.route('/')
 def home():
-	return jsonify({'message': 'Welcome to the SlideIt-API'})
+	return jsonify({'message': 'Welcome to the SlideGen-API'})
 
 
 @app.route('/predict_text', methods=['POST', 'GET'])
@@ -57,7 +44,7 @@ def predict_text():
 		document = parsing.parse_text(raw_data)
 		execute_pipeline(document)
 		file_link = drive_interaction.uploadFiles()
-		return jsonify({'message': "you now get the pdf and output video", "link": file_link})
+		return jsonify({'message': "you now get the pdf ", "link": file_link})
 
 	if request.method == 'GET':
 		return jsonify({'message': 'Please use the POST method'})	
@@ -72,7 +59,7 @@ def predict_url():
 		document = parsing.parse_url(raw_data)
 		execute_pipeline(document)				
 		file_link = drive_interaction.uploadFiles()
-		return jsonify({'message': "you now get the pdf and output video", "link": file_link})
+		return jsonify({'message': "you now get the pdf", "link": file_link})
 
 	if request.method == 'GET':
 		return jsonify({'message': 'Please use the POST method'})
@@ -87,7 +74,7 @@ def predict_upload():
 		document = parsing.parse_upload(raw_data)
 		execute_pipeline(document)
 		file_link = drive_interaction.uploadFiles()
-		return jsonify({'message': "you now get the pdf and output video", "link": file_link})
+		return jsonify({'message': "you now get the pdf", "link": file_link})
 
 	if request.method == 'GET':
 		return jsonify({'message': 'Please use the POST method'})	
