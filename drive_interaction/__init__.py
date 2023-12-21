@@ -86,7 +86,7 @@ def uploadFiles():
             supportsAllDrives=True
         ).execute()
 
-        video_file_link = "https://drive.google.com/file/d/" + video_file.get('id') + "/view?usp=sharing"
+        # video_file_link = "https://drive.google.com/file/d/" + video_file.get('id') + "/view?usp=sharing"
 
 
 
