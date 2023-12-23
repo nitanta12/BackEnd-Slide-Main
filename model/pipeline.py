@@ -63,17 +63,26 @@ def get_sentence_features(paragraph_split):
 
     return sentence_features
 
+#region Tokenization
+def is_punctuation(char):
+    punctuation = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
+    return char in punctuation
+
+def remove_punctuation_from_word(word):
+    return ''.join(char for char in word if not is_punctuation(char))
+
 def clean_text(text):
 
     # Example text
-    words = word_tokenize(text)
-    table = str.maketrans('', '', string.punctuation)
-    stripped = [w.translate(table) for w in words]
+    words = text.split()
+    #table = str.maketrans('', '', string.punctuation)
+    stripped = [remove_punctuation_from_word(word) for word in words]
 
     # Remove stopwords from the list of words
     stop_words = set(stopwords.words('english'))
     filtered = [w for w in stripped if not w in stop_words]
     return ' '.join(filtered)
+     #endregion For tokenization and stopping words
 
 def extract_image(query):  
     res = service.cse().list(q=query, cx=cse_id, searchType="image").execute()
