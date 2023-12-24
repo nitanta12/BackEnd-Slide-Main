@@ -3,7 +3,7 @@ from flask import Flask
 from flask_cors import CORS
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = "slidegen"
+app.config['SECRET_KEY'] = "slideIt"
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 cors = CORS(app, resources={r"*": {"origins": "*"}})

@@ -8,9 +8,7 @@ import os
 
 from model.config import *
 import numpy as np
-from keras_preprocessing.sequence import pad_sequences
-from sklearn_extra.cluster import KMedoids
-from sklearn.neighbors import NearestNeighbors
+#from tensorflow.keras.preprocessing.sequence import pad_sequences
 from googleapiclient.discovery import build
 
 #load environment variables
@@ -30,6 +28,44 @@ def create_attention_mask(input_ids):
     attention_masks.append(att_mask)  # basically attention_masks is a list of list
   return attention_masks
 
+def pad_sequences(sequences, maxlen, padding='post', truncating='post', value=0):
+    """
+    Pads each sequence to the same length, the length is defined by 'maxlen'.
+    
+    Args:
+    sequences (list of list of int): List of sequences.
+    maxlen (int): Maximum length of all sequences.
+    padding (str, optional): 'pre' or 'post' - pad either before or after each sequence. Default is 'post'.
+    truncating (str, optional): 'pre' or 'post' - remove values from sequences larger than 'maxlen' either at the beginning or at the end. Default is 'post'.
+    value (int, optional): Padding value. Default is 0.
+
+    Returns:
+    numpy.array: Padded sequences.
+    """
+
+    # Initialize the padded sequences as a list of lists
+    padded_sequences = []
+
+    for seq in sequences:
+        # Truncate the sequence if necessary
+        if len(seq) > maxlen:
+            if truncating == 'pre':
+                seq = seq[-maxlen:]
+            else:
+                seq = seq[:maxlen]
+
+        # Pad the sequence if necessary
+        if len(seq) < maxlen:
+            padding_length = maxlen - len(seq)
+            if padding == 'pre':
+                seq = [value] * padding_length + seq
+            else:
+                seq = seq + [value] * padding_length
+
+        padded_sequences.append(seq)
+
+    return padded_sequences
+
 def get_sentence_features(paragraph_split):
     input_tokens = []
     for i in paragraph_split:
@@ -39,7 +75,8 @@ def get_sentence_features(paragraph_split):
     for i in input_tokens:
         temp.append(len(i))
 
-    input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
+    #input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
+    input_ids = pad_sequences(input_tokens,100)
     input_masks = create_attention_mask(input_ids)
     
     ##--For CPU --##
@@ -91,18 +128,7 @@ def extract_image(query):
 #endregion
 
 #region    code we have to right logic for
-def clustering(sentence_features, number_extract=3):
-    number_of_sent = len(sentence_features) if len(sentence_features) < 12 else 12
-    kmeds = KMedoids(n_clusters=number_extract, 
-                  random_state=0).fit(sentence_features)
 
-    cluster_center = kmeds.cluster_centers_
-    nbrs = NearestNeighbors(n_neighbors= number_of_sent, 
-        algorithm='brute').fit(sentence_features)
-    distances, indices = nbrs.kneighbors(
-    cluster_center)
-
-    return indices
 
 def extractive_sum(indices, paragraph_split, number_extract=3):
     # Extractive summarization
@@ -154,7 +180,7 @@ def get_slide_content(text):
     paragraph_split = sent_tokenize(text)
     sentence_features = get_sentence_features(paragraph_split)
 
-    indices = clustering(sentence_features)    
+    indices = (sentence_features)    
     top_answer, extractive_answer = extractive_sum(indices, paragraph_split)
 
     for i, extract_sentences in enumerate(extractive_answer):
