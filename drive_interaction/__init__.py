@@ -69,22 +69,22 @@ def uploadFiles():
         presentation_file_link = "https://drive.google.com/file/d/" + presentation_file.get('id') + "/view?usp=sharing"
 
         # Upload the video to Google Drive
-        video_file_metadata = {'name': 'video.mp4'}
+        # video_file_metadata = {'name': 'video.mp4'}
 
-        video_mimetype = 'video/*'
-        video_media = MediaIoBaseUpload(open("./output.mp4",'rb'), mimetype=video_mimetype)
+        # video_mimetype = 'video/*'
+        # video_media = MediaIoBaseUpload(open("./output.mp4",'rb'), mimetype=video_mimetype)
 
-        video_file = service.files().create(body=video_file_metadata,
-                                        media_body=video_media,
-                                        fields='id').execute()
-        print('Video File ID: %s' % video_file.get('id'))
+        # video_file = service.files().create(body=video_file_metadata,
+        #                                 media_body=video_media,
+        #                                 fields='id').execute()
+        # print('Video File ID: %s' % video_file.get('id'))
 
-        # Set the permissions of the uploaded file to public
-        service.permissions().create(
-            fileId=video_file['id'],
-            body={'type': 'anyone', 'role': 'writer'},
-            supportsAllDrives=True
-        ).execute()
+        # # Set the permissions of the uploaded file to public
+        # service.permissions().create(
+        #     fileId=video_file['id'],
+        #     body={'type': 'anyone', 'role': 'writer'},
+        #     supportsAllDrives=True
+        # ).execute()
 
         # video_file_link = "https://drive.google.com/file/d/" + video_file.get('id') + "/view?usp=sharing"
 
@@ -96,7 +96,7 @@ def uploadFiles():
         print(f'An error occurred: {error}')
         file = None
 
-    return {'presentation_link': presentation_file_link, 'video_link': video_file_link}
+    return {'presentation_link': presentation_file_link}
 
 
 if __name__ == "__main__":
