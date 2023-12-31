@@ -1,6 +1,6 @@
 from newspaper import Article
 from datetime import datetime
-
+# import docx2txt
 
 def parse_url(url):
     article = Article(url)

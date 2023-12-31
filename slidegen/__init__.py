@@ -48,7 +48,7 @@ def create_new_slide(topic,content):
 
 def convert_to_frames():
     # Convert the pdf to frames
-    images_from_path = convert_from_path('output.pdf')
+    images_from_path = convert_from_path('output.pdf',poppler_path=r"C:\Program Files (x86)\poppler-22.04.0\Library\bin")
     for i, image in enumerate(images_from_path):
         image_path = os.path.join(image_loc, 'frame_{}.jpg'.format(i))
         image.save(image_path)
