@@ -8,8 +8,14 @@ import os
 
 from model.config import *
 import numpy as np
-#from tensorflow.keras.preprocessing.sequence import pad_sequences
+from keras_preprocessing.sequence import pad_sequences
+# from sklearn_extra.cluster import KMedoids
+from sklearn.neighbors import NearestNeighbors
 from googleapiclient.discovery import build
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style("whitegrid")
 
 #load environment variables
 from dotenv import load_dotenv
@@ -20,51 +26,13 @@ api_key = os.getenv('SEARCH_KEY')
 cse_id = os.getenv('ENGINE_KEY')
 service = build("customsearch", "v1", developerKey=api_key)
 
-#region     Pre Processing
+
 def create_attention_mask(input_ids):
   attention_masks = []
   for sent in input_ids:
     att_mask = [int(token_id > 0) for token_id in sent]  # create a list of 0 and 1.
     attention_masks.append(att_mask)  # basically attention_masks is a list of list
   return attention_masks
-
-def pad_sequences(sequences, maxlen, padding='post', truncating='post', value=0):
-    """
-    Pads each sequence to the same length, the length is defined by 'maxlen'.
-    
-    Args:
-    sequences (list of list of int): List of sequences.
-    maxlen (int): Maximum length of all sequences.
-    padding (str, optional): 'pre' or 'post' - pad either before or after each sequence. Default is 'post'.
-    truncating (str, optional): 'pre' or 'post' - remove values from sequences larger than 'maxlen' either at the beginning or at the end. Default is 'post'.
-    value (int, optional): Padding value. Default is 0.
-
-    Returns:
-    numpy.array: Padded sequences.
-    """
-
-    # Initialize the padded sequences as a list of lists
-    padded_sequences = []
-
-    for seq in sequences:
-        # Truncate the sequence if necessary
-        if len(seq) > maxlen:
-            if truncating == 'pre':
-                seq = seq[-maxlen:]
-            else:
-                seq = seq[:maxlen]
-
-        # Pad the sequence if necessary
-        if len(seq) < maxlen:
-            padding_length = maxlen - len(seq)
-            if padding == 'pre':
-                seq = [value] * padding_length + seq
-            else:
-                seq = seq + [value] * padding_length
-
-        padded_sequences.append(seq)
-
-    return padded_sequences
 
 def get_sentence_features(paragraph_split):
     input_tokens = []
@@ -75,8 +43,7 @@ def get_sentence_features(paragraph_split):
     for i in input_tokens:
         temp.append(len(i))
 
-    #input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
-    input_ids = pad_sequences(input_tokens,100)
+    input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
     input_masks = create_attention_mask(input_ids)
     
     ##--For CPU --##
@@ -100,46 +67,98 @@ def get_sentence_features(paragraph_split):
 
     return sentence_features
 
-#region Tokenization
-def is_punctuation(char):
-    punctuation = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
-    return char in punctuation
-
-def remove_punctuation_from_word(word):
-    return ''.join(char for char in word if not is_punctuation(char))
-
 def clean_text(text):
 
     # Example text
-    words = text.split()
-    #table = str.maketrans('', '', string.punctuation)
-    stripped = [remove_punctuation_from_word(word) for word in words]
+    words = word_tokenize(text)
+    table = str.maketrans('', '', string.punctuation)
+    stripped = [w.translate(table) for w in words]
 
     # Remove stopwords from the list of words
     stop_words = set(stopwords.words('english'))
     filtered = [w for w in stripped if not w in stop_words]
     return ' '.join(filtered)
-     #endregion For tokenization and stopping words
 
 def extract_image(query):  
     res = service.cse().list(q=query, cx=cse_id, searchType="image").execute()
-    img_url = res["items"][0]["link"]
-    return img_url
-#endregion
 
-#region    code we have to right logic for
+    # Check if 'items' is in the response and it has at least one item
+    if 'items' in res and res['items']:
+        img_url = res['items'][0]['link']
+        return img_url
+    else:
+        # Handle the case where no results are found or 'items' is not in the response
+        print("No image results found for the query.")
+        return None
 
+
+def manhattan(p1, p2):
+    return np.abs((p1[0]-p2[0])) + np.abs((p1[1]-p2[1]))
+
+def get_costs(data, medoids):
+    clusters = {i:[] for i in range(len(medoids))}
+    cst = 0
+    for d in data:
+        dst = np.array([manhattan(d, md) for md in medoids])
+        c = dst.argmin()
+        clusters[c].append(d)
+        cst+=dst.min()
+        
+    clusters = {k:np.array(v) for k,v in clusters.items()}
+    return clusters, cst
+
+def KMedoids(data, k, iters=100):
+    np.random.seed(0)
+    initial_medoids = np.random.choice(len(data), k, replace=False)
+    medoids = data[initial_medoids]
+    clusters, cost = get_costs(data, medoids)
+
+    for count in range(iters):
+        swap = False
+        for i in range(len(data)):
+            if not any(np.array_equal(data[i], m) for m in medoids):
+                for j in range(k):
+                    tmp_medoids = medoids.copy()
+                    tmp_medoids[j] = data[i]
+                    clusters_, cost_ = get_costs(data, tmp_medoids)
+
+                    if cost_ < cost:
+                        medoids = tmp_medoids
+                        cost = cost_
+                        swap = True
+                        clusters = clusters_
+                        break
+
+        if not swap:
+            break
+    return medoids, clusters
+
+def clustering(sentence_features, number_extract=3):
+    number_of_sent = len(sentence_features) if len(sentence_features) < 12 else 12
+    medoids, _ = KMedoids(sentence_features, k=number_extract)
+
+    # Ensure medoids are in the correct format (numpy array)
+    if not isinstance(medoids, np.ndarray):
+        medoids = np.array(medoids)
+
+    nbrs = NearestNeighbors(n_neighbors=number_of_sent, algorithm='brute').fit(sentence_features)
+    distances, indices = nbrs.kneighbors(medoids)
+
+    return indices
 
 def extractive_sum(indices, paragraph_split, number_extract=3):
-    # Extractive summarization
-    num_of_sents = [8,12,6]
+    number_extract = min(number_extract, len(indices))
     top_answer = []
     extractive_sum = []
-    for i in range(number_extract):
-        top_answer.append(paragraph_split[indices[i][0]])
-        extractive_sum.append(list(map(lambda x: paragraph_split[x], np.sort(indices[i][:num_of_sents[i]]))))
-    return top_answer, extractive_sum
 
+    for i in range(number_extract):
+       if np.any(indices[i]):
+            top_answer.append(paragraph_split[indices[i][0]])
+            num_of_sents = min([8, 12, 6][i], len(indices[i]))  # Ensure not to exceed the length
+            sorted_indices = np.sort(indices[i][:num_of_sents])
+            extractive_sum.append([paragraph_split[idx] for idx in sorted_indices])
+
+    return top_answer, extractive_sum
 def abstractive_sum(extract_sentences):
     # Abstractive summarization
     text = ''.join(extract_sentences)
@@ -167,10 +186,7 @@ def abstractive_sum(extract_sentences):
     # )
     decoded_summaries = [tokenizer.decode(s, skip_special_tokens=True, clean_up_tokenization_spaces=True) for s in summaries]
     return decoded_summaries[0]
-#endregion     end of the region where our logic is written
 
-
-#region Slides
 def get_slide_content(text):
     topics = ['Background', 'Details', 'Conclusion']
     sent_per_slide = 3
@@ -180,7 +196,7 @@ def get_slide_content(text):
     paragraph_split = sent_tokenize(text)
     sentence_features = get_sentence_features(paragraph_split)
 
-    indices = (sentence_features)    
+    indices = clustering(sentence_features)    
     top_answer, extractive_answer = extractive_sum(indices, paragraph_split)
 
     for i, extract_sentences in enumerate(extractive_answer):
@@ -207,4 +223,3 @@ def get_slide_content(text):
         slide_content[topics[i]] = section_slides
 
     return total_slides, slide_content
-#endregion

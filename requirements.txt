@@ -13,7 +13,6 @@ gast==0.4.0
 google-auth==2.10.0
 google-pasta==0.2.0
 google-api-core==2.8.2
-google-api-python-client==2.56.0
 google-auth-httplib2==0.1.0
 google-auth-oauthlib==0.4.6
 googleapis-common-protos==1.56.4
@@ -76,4 +75,5 @@ newspaper3k==0.2.8
 docx2txt==0.8
 azure-cognitiveservices-speech==1.25.0
 python-dotenv==0.21.1
-google-api-python-client==2.80.0
+google-api-python-client== 2.17.0
+# google-api-python-client==2.56.0
