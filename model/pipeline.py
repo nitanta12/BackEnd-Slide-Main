@@ -34,6 +34,45 @@ def create_attention_mask(input_ids):
     attention_masks.append(att_mask)  # basically attention_masks is a list of list
   return attention_masks
 
+
+def pad_sequences(sequences, maxlen, padding='post', truncating='post', value=0):
+    """
+    Pads each sequence to the same length, the length is defined by 'maxlen'.
+    
+    Args:
+    sequences (list of list of int): List of sequences.
+    maxlen (int): Maximum length of all sequences.
+    padding (str, optional): 'pre' or 'post' - pad either before or after each sequence. Default is 'post'.
+    truncating (str, optional): 'pre' or 'post' - remove values from sequences larger than 'maxlen' either at the beginning or at the end. Default is 'post'.
+    value (int, optional): Padding value. Default is 0.
+
+    Returns:
+    numpy.array: Padded sequences.
+    """
+
+    # Initialize the padded sequences as a list of lists
+    padded_sequences = []
+
+    for seq in sequences:
+        # Truncate the sequence if necessary
+        if len(seq) > maxlen:
+            if truncating == 'pre':
+                seq = seq[-maxlen:]
+            else:
+                seq = seq[:maxlen]
+
+        # Pad the sequence if necessary
+        if len(seq) < maxlen:
+            padding_length = maxlen - len(seq)
+            if padding == 'pre':
+                seq = [value] * padding_length + seq
+            else:
+                seq = seq + [value] * padding_length
+
+        padded_sequences.append(seq)
+
+    return padded_sequences
+
 def get_sentence_features(paragraph_split):
     input_tokens = []
     for i in paragraph_split:
@@ -43,16 +82,13 @@ def get_sentence_features(paragraph_split):
     for i in input_tokens:
         temp.append(len(i))
 
-    input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
+    #input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
+    input_ids = pad_sequences(input_tokens,100)
     input_masks = create_attention_mask(input_ids)
     
     ##--For CPU --##
     input_ids = torch.tensor(input_ids, dtype=torch.long)
     input_masks = torch.tensor(input_masks, dtype=torch.long)
-
-    ##--For GPU --##
-    # input_ids = torch.tensor(input_ids, dtype=torch.long).to(device)
-    # input_masks = torch.tensor(input_masks, dtype=torch.long).to(device)
 
     with torch.no_grad():
         outputs = model(input_ids, attention_mask=input_masks)
@@ -62,22 +98,28 @@ def get_sentence_features(paragraph_split):
     ## -- For CPU --## Because it is assumed to be on CPU .cpu() function is not used
     sentence_features = encoder_output[:,0,:].detach().numpy()
 
-    ## -- For GPU --## Because it is assumed to be on GPU .cpu() function is used
-    # sentence_features = encoder_output[:,0,:].detach().cpu().numpy()
-
     return sentence_features
+
+#region Tokenization
+def is_punctuation(char):
+    punctuation = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
+    return char in punctuation
+
+def remove_punctuation_from_word(word):
+    return ''.join(char for char in word if not is_punctuation(char))
 
 def clean_text(text):
 
     # Example text
-    words = word_tokenize(text)
-    table = str.maketrans('', '', string.punctuation)
-    stripped = [w.translate(table) for w in words]
+    words = text.split()
+    #table = str.maketrans('', '', string.punctuation)
+    stripped = [remove_punctuation_from_word(word) for word in words]
 
     # Remove stopwords from the list of words
     stop_words = set(stopwords.words('english'))
     filtered = [w for w in stripped if not w in stop_words]
     return ' '.join(filtered)
+     #endregion For tokenization and stopping words
 
 def extract_image(query):  
     res = service.cse().list(q=query, cx=cse_id, searchType="image").execute()
