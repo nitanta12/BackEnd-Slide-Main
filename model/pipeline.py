@@ -8,9 +8,7 @@ import os
 
 from model.config import *
 import numpy as np
-from keras_preprocessing.sequence import pad_sequences
-# from sklearn_extra.cluster import KMedoids
-from sklearn.neighbors import NearestNeighbors
+from math import sqrt
 from googleapiclient.discovery import build
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,7 +24,7 @@ api_key = os.getenv('SEARCH_KEY')
 cse_id = os.getenv('ENGINE_KEY')
 service = build("customsearch", "v1", developerKey=api_key)
 
-
+#region Feature 
 def create_attention_mask(input_ids):
   attention_masks = []
   for sent in input_ids:
@@ -81,8 +79,6 @@ def get_sentence_features(paragraph_split):
     temp = []
     for i in input_tokens:
         temp.append(len(i))
-
-    #input_ids = pad_sequences(input_tokens, maxlen=100, dtype="long", value=0, truncating="post", padding="post")
     input_ids = pad_sequences(input_tokens,100)
     input_masks = create_attention_mask(input_ids)
     
@@ -99,6 +95,7 @@ def get_sentence_features(paragraph_split):
     sentence_features = encoder_output[:,0,:].detach().numpy()
 
     return sentence_features
+#endregion FeatureExtraction
 
 #region Tokenization
 def is_punctuation(char):
@@ -112,15 +109,15 @@ def clean_text(text):
 
     # Example text
     words = text.split()
-    #table = str.maketrans('', '', string.punctuation)
     stripped = [remove_punctuation_from_word(word) for word in words]
 
     # Remove stopwords from the list of words
     stop_words = set(stopwords.words('english'))
     filtered = [w for w in stripped if not w in stop_words]
     return ' '.join(filtered)
-     #endregion For tokenization and stopping words
+#endregion For tokenization and stopping words
 
+#region Image
 def extract_image(query):  
     res = service.cse().list(q=query, cx=cse_id, searchType="image").execute()
 
@@ -132,8 +129,10 @@ def extract_image(query):
         # Handle the case where no results are found or 'items' is not in the response
         print("No image results found for the query.")
         return None
+#endregion
 
-
+#region Algorithm
+ #region KMediod   
 def manhattan(p1, p2):
     return np.abs((p1[0]-p2[0])) + np.abs((p1[1]-p2[1]))
 
@@ -174,17 +173,48 @@ def KMedoids(data, k, iters=100):
         if not swap:
             break
     return medoids, clusters
+#endregion
+#region NearestNeighbor
+def euclidean_distance(row1, row2):
+    distance = 0.0
+    for i in range(len(row1)-1):
+        distance += (row1[i] - row2[i])**2
+    return sqrt(distance)
 
+def get_neighbors(train, test_row, num_neighbors):
+    distances = []
+    for train_row in train:
+        dist = euclidean_distance(test_row, train_row)
+        distances.append((train_row, dist))
+    distances.sort(key=lambda tup: tup[1])
+    neighbors = []
+    for i in range(num_neighbors):
+        neighbors.append(distances[i][0])
+    return neighbors
+#endregion
 def clustering(sentence_features, number_extract=3):
-    number_of_sent = len(sentence_features) if len(sentence_features) < 12 else 12
+    number_of_sent = len(sentence_features) if len(sentence_features) < 10 else 10
+    
+    # Use custom K-Medoids implementation
     medoids, _ = KMedoids(sentence_features, k=number_extract)
+    # Ensure medoids are in the correct format (list of lists)
+    if not isinstance(medoids, list):
+        medoids = medoids.tolist()
 
-    # Ensure medoids are in the correct format (numpy array)
-    if not isinstance(medoids, np.ndarray):
-        medoids = np.array(medoids)
+    all_neighbors = []
+    for medoid in medoids:
+        neighbors = get_neighbors(sentence_features, medoid, number_of_sent)
+        all_neighbors.append(neighbors)
 
-    nbrs = NearestNeighbors(n_neighbors=number_of_sent, algorithm='brute').fit(sentence_features)
-    distances, indices = nbrs.kneighbors(medoids)
+    # Convert the list of neighbors for each medoid into indices using numpy
+    indices = []
+    for neighbors in all_neighbors:
+        neighbor_indices = []
+        for neighbor in neighbors:
+            idx = np.where(np.all(sentence_features == neighbor, axis=1))[0]
+            if idx.size > 0:
+                neighbor_indices.append(idx[0])
+        indices.append(neighbor_indices)
 
     return indices
 
@@ -194,11 +224,15 @@ def extractive_sum(indices, paragraph_split, number_extract=3):
     extractive_sum = []
 
     for i in range(number_extract):
-       if np.any(indices[i]):
-            top_answer.append(paragraph_split[indices[i][0]])
+        if indices[i]:  # Check if indices list is not empty
+            # Safe access to paragraph_split
+            first_idx = indices[i][0] if 0 <= indices[i][0] < len(paragraph_split) else None
+            if first_idx is not None:
+                top_answer.append(paragraph_split[first_idx])
+
             num_of_sents = min([8, 12, 6][i], len(indices[i]))  # Ensure not to exceed the length
-            sorted_indices = np.sort(indices[i][:num_of_sents])
-            extractive_sum.append([paragraph_split[idx] for idx in sorted_indices])
+            sorted_indices = sorted(indices[i][:num_of_sents])  # Pure Python alternative to np.sort
+            extractive_sum.append([paragraph_split[idx] for idx in sorted_indices if 0 <= idx < len(paragraph_split)])
 
     return top_answer, extractive_sum
 def abstractive_sum(extract_sentences):
@@ -228,7 +262,10 @@ def abstractive_sum(extract_sentences):
     # )
     decoded_summaries = [tokenizer.decode(s, skip_special_tokens=True, clean_up_tokenization_spaces=True) for s in summaries]
     return decoded_summaries[0]
+#endregion 
 
+
+#region Slides
 def get_slide_content(text):
     topics = ['Background', 'Details', 'Conclusion']
     sent_per_slide = 3
@@ -265,3 +302,4 @@ def get_slide_content(text):
         slide_content[topics[i]] = section_slides
 
     return total_slides, slide_content
+#endregion
